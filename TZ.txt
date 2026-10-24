@@ -1,0 +1,1987 @@
+# AI Targeting Copilot for Meta Ads
+
+## 1. Назначение продукта
+
+Создать веб-приложение, которое превращает описание желаемой аудитории на естественном языке в готовую стратегию таргетинга для Meta Ads.
+
+Пример запроса:
+
+> У меня фитнес-клуб в Астане. Хочу показывать рекламу людям, которые уже регулярно занимаются фитнесом, а не новичкам.
+
+Система должна:
+
+1. понять бизнес и рекламную задачу;
+2. сегментировать целевую аудиторию;
+3. предложить рекламные гипотезы;
+4. найти реальные доступные targeting entities Meta;
+5. предложить географию и демографию;
+6. построить стратегию Custom Audience / Retargeting / Lookalike;
+7. предложить оффер для каждого сегмента;
+8. разработать creative strategy;
+9. проверить аудитории через Meta Marketing API;
+10. оценить потенциальный размер/reach аудитории;
+11. сформировать несколько готовых вариантов targeting strategy.
+
+Главный принцип:
+
+**LLM отвечает за маркетинговое мышление. Meta API отвечает за фактическую проверку возможностей таргетинга.**
+
+---
+
+# 2. Основная проблема
+
+Сегодня таргетолог должен самостоятельно:
+
+- изучать рынок;
+- придумывать сегменты;
+- искать интересы в Meta;
+- проверять, существуют ли они;
+- комбинировать interests / behaviors / demographics;
+- оценивать размер аудитории;
+- решать, использовать broad или interests;
+- продумывать retargeting;
+- выбирать Lookalike sources;
+- придумывать офферы;
+- придумывать креативные углы.
+
+LLM способен помочь с маркетинговой частью, но обычный ChatGPT может предложить targeting options, которых в Meta вообще нет.
+
+Приложение должно устранить этот разрыв.
+
+---
+
+# 3. Главный пользовательский сценарий
+
+Пользователь открывает приложение.
+
+Видит большое поле:
+
+## «Кого вы хотите найти?»
+
+Например:
+
+> Владельцы квартир в Астане, которые недавно купили жильё и сейчас делают ремонт.
+
+или:
+
+> Люди, которые уже занимаются фитнесом минимум несколько месяцев.
+
+или:
+
+> Родители детей 5–10 лет, заинтересованные в дополнительном образовании.
+
+Дополнительные поля:
+
+- что рекламируем;
+- сайт;
+- страна;
+- город;
+- бюджет;
+- цель рекламы;
+- стоимость продукта;
+- B2B / B2C;
+- существующая клиентская база;
+- есть ли Meta Pixel;
+- есть ли Instagram/Facebook engagement;
+- есть ли CRM.
+
+После нажатия:
+
+**Generate targeting strategy**
+
+система строит полный targeting plan.
+
+---
+
+# 4. Результат анализа
+
+Результат должен состоять из пяти основных разделов.
+
+## 4.1. Сегментация целевой аудитории
+
+LLM должен разбить исходную аудиторию на несколько различных маркетинговых сегментов.
+
+Пример:
+
+Запрос:
+
+> Люди, которые уже занимаются фитнесом.
+
+Ответ:
+
+### Segment A — Regular Gym Users
+
+Описание:
+
+Люди, регулярно посещающие тренажёрный зал и уже имеющие сформированную тренировочную привычку.
+
+Signals:
+
+- strength training;
+- bodybuilding;
+- gym;
+- sports nutrition;
+- fitness equipment.
+
+Intent:
+
+Высокий.
+
+Pain points:
+
+- неудобный зал;
+- переполненность;
+- плохие тренажёры;
+- отсутствие прогресса;
+- высокая цена текущего клуба.
+
+---
+
+### Segment B — Functional Training
+
+Signals:
+
+- CrossFit;
+- functional training;
+- HIIT;
+- endurance training.
+
+---
+
+### Segment C — Running / Cardio
+
+Signals:
+
+- running;
+- marathon;
+- Garmin;
+- Strava;
+- running shoes;
+- cardio training.
+
+Важно:
+
+**Signals ещё не означают, что Meta позволяет использовать их как targeting entities.**
+
+Каждый signal должен пройти следующий этап проверки.
+
+---
+
+# 5. Meta Targeting Resolver
+
+Это один из ключевых компонентов системы.
+
+LLM генерирует semantic signals:
+
+```json
+[
+  "strength training",
+  "bodybuilding",
+  "sports nutrition",
+  "CrossFit",
+  "running",
+  "Garmin",
+  "fitness clubs"
+]
+```
+
+Targeting Resolver отправляет их в Meta API.
+
+В результате приложение должно различать:
+
+### VALID
+
+Реально существует в Meta.
+
+```json
+{
+  "name": "Bodybuilding",
+  "meta_id": "...",
+  "type": "interest",
+  "status": "valid"
+}
+```
+
+### RELATED
+
+Meta нашла похожий targeting entity.
+
+### NOT_AVAILABLE
+
+Такого targeting option в Meta нет.
+
+### RESTRICTED / UNSUPPORTED
+
+Использование невозможно или ограничено.
+
+---
+
+# 6. Критическое правило Grounding
+
+LLM НИКОГДА не должен показывать пользователю targeting entity как «доступный в Meta», пока он не подтверждён Meta API.
+
+Допустимо:
+
+> Маркетинговый сигнал: «люди, занимающиеся силовыми тренировками».
+
+Недопустимо:
+
+> Meta Interest: Strength Training
+
+если API этого не подтвердил.
+
+Каждый элемент интерфейса должен иметь source status:
+
+- `LLM hypothesis`
+- `Meta verified`
+- `Meta suggestion`
+- `Not available`
+
+---
+
+# 7. Geo & Demographics
+
+Следующий блок:
+
+## Геолокация и демография
+
+Система должна предложить:
+
+- country;
+- city;
+- region;
+- radius;
+- age range;
+- gender, если имеет смысл;
+- language, если имеет смысл;
+- exclusions.
+
+Пример:
+
+### Geo recommendation
+
+Astana
+
+Основной вариант:
+
+`5 km radius around gym`
+
+Дополнительный тест:
+
+`8 km radius`
+
+Причина:
+
+для локального фитнес-клуба вероятность конверсии обычно сильно зависит от расстояния до клуба.
+
+Важно:
+
+LLM предлагает стратегию.
+
+Geo Resolver проверяет существование location через Meta API.
+
+---
+
+# 8. Audience Strategies
+
+Для каждого запроса система должна генерировать минимум 3 альтернативных стратегии.
+
+Например:
+
+## Strategy A — Broad
+
+```text
+Astana
+Age 23–42
+No interests
+Advantage+ Audience
+```
+
+Задача:
+
+дать алгоритму Meta самому найти пользователей.
+
+---
+
+## Strategy B — Intent / Interests
+
+```text
+Astana
+Age 23–42
+
+Bodybuilding
+OR
+Physical fitness
+OR
+Sports nutrition
+```
+
+Все интересы должны быть Meta Verified.
+
+---
+
+## Strategy C — Lookalike
+
+```text
+Source:
+existing customers
+
+Lookalike:
+1%
+
+Geo:
+Astana
+```
+
+---
+
+Дополнительно:
+
+## Strategy D — Retargeting
+
+```text
+Instagram engagers — 30 days
+Instagram engagers — 90 days
+Website visitors — 30 days
+Video viewers — 50%
+Lead-form opens
+```
+
+Только если соответствующие источники доступны.
+
+---
+
+# 9. Retargeting & Lookalike Planner
+
+Система должна спрашивать пользователя, какие first-party data доступны:
+
+- Customer list;
+- Meta Pixel;
+- Conversions API;
+- Website Visitors;
+- Instagram account;
+- Facebook Page;
+- Video views;
+- Lead forms;
+- Existing purchasers;
+- CRM.
+
+На основании этого строить audience tree.
+
+Пример:
+
+```text
+ALL TRAFFIC
+│
+├── Cold
+│   ├── Broad
+│   ├── Interests
+│   └── Lookalike
+│
+├── Warm
+│   ├── Instagram Engagers 30d
+│   ├── Video Viewers 30d
+│   ├── Website Visitors 30d
+│   └── Lead Form Opened
+│
+└── Hot
+    ├── Product View
+    ├── Add to Cart
+    ├── Lead
+    └── Existing Customer
+```
+
+Также показывать exclusions.
+
+Например:
+
+Cold campaigns:
+
+`Exclude customers`
+
+Retargeting:
+
+`Exclude purchasers`
+
+---
+
+# 10. Lookalike recommendation engine
+
+Если пользователь имеет source audience, приложение предлагает:
+
+- 1%;
+- 1–3%;
+- 3–5%.
+
+Но приложение не должно утверждать, что конкретный Lookalike лучше, пока нет данных кампании.
+
+Формулировка:
+
+`Recommended experiment`
+
+а не:
+
+`Best audience`.
+
+---
+
+# 11. Упаковка предложения
+
+Для каждого audience segment система должна определить:
+
+- Awareness level;
+- Problem;
+- Motivation;
+- Objection;
+- Offer;
+- Hook;
+- CTA.
+
+Пример:
+
+### Regular Gym Users
+
+Не использовать:
+
+> Начни заниматься спортом!
+
+Пользователь уже занимается.
+
+Лучше:
+
+> Уже тренируешься, но текущий зал перестал устраивать?
+
+Offer:
+
+> 7 дней полного доступа без долгосрочного абонемента.
+
+Hook:
+
+> Не начинай тренироваться заново. Просто смени зал.
+
+CTA:
+
+> Попробовать клуб.
+
+---
+
+# 12. Creative Strategy
+
+Для каждого сегмента:
+
+### Creative angle
+
+Что показать.
+
+### Hook
+
+Первые 1–3 секунды.
+
+### Visual idea
+
+Какой визуал использовать.
+
+### Copy angle
+
+Основной рекламный message.
+
+### CTA
+
+Что должен сделать пользователь.
+
+### Format
+
+- Reel;
+- Story;
+- Feed;
+- carousel;
+- static image.
+
+Пример:
+
+```text
+Segment:
+Experienced gym users
+
+Angle:
+Better equipment
+
+Visual:
+Close-up of premium machines.
+
+Hook:
+"Тренируешься серьёзно? Тогда оборудование тоже должно быть серьёзным."
+
+CTA:
+Try 7 days
+```
+
+---
+
+# 13. Creative-to-audience mapping
+
+Очень важная функция.
+
+Система не должна просто давать список креативов.
+
+Она должна показывать связь:
+
+```text
+Audience
+    ↓
+Problem
+    ↓
+Message
+    ↓
+Creative
+```
+
+Пример:
+
+```text
+Experienced gym user
+
+Problem:
+Current gym is overcrowded.
+
+Offer:
+Train without queues.
+
+Creative:
+Video showing free machines during peak hours.
+
+Hook:
+"Тренировка не должна состоять из ожидания тренажёра."
+```
+
+---
+
+# 14. Reach / Audience Estimate
+
+После формирования targeting specification приложение должно запрашивать доступную оценку аудитории/доставки у Meta.
+
+Показывать:
+
+### Audience A
+
+Broad
+
+Potential audience:
+
+`...`
+
+### Audience B
+
+Fitness Interests
+
+Potential audience:
+
+`...`
+
+### Audience C
+
+Lookalike
+
+Potential audience:
+
+`...`
+
+Если API не может получить estimate:
+
+показывать:
+
+`Estimate unavailable`
+
+а не генерировать число через LLM.
+
+---
+
+# 15. Audience Quality Score
+
+Можно добавить внутренний scoring.
+
+Например:
+
+```text
+Semantic relevance: 92/100
+Meta availability: 100/100
+Audience size: 76/100
+Intent strength: 88/100
+First-party signal: 0/100
+```
+
+Total:
+
+`83 / 100`
+
+Важно:
+
+это внутренний heuristic score продукта.
+
+Не выдавать его за показатель Meta.
+
+---
+
+# 16. Experiment Builder
+
+Система должна превращать стратегию в тест.
+
+Например:
+
+# Experiment 001
+
+Hypothesis:
+
+> Existing fitness users respond better to performance messaging than beginner messaging.
+
+Audience:
+
+Fitness Intent.
+
+Creative A:
+
+Performance angle.
+
+Creative B:
+
+Community angle.
+
+Creative C:
+
+Equipment angle.
+
+Variable:
+
+creative angle.
+
+Не менять одновременно несколько переменных.
+
+---
+
+# 17. Recommendation confidence
+
+Каждая рекомендация получает confidence.
+
+Пример:
+
+```json
+{
+  "recommendation": "Target existing gym users with performance-focused creative",
+  "confidence": 0.81,
+  "basis": [
+    "user brief",
+    "marketing reasoning",
+    "Meta verified targeting"
+  ]
+}
+```
+
+Различать:
+
+- `high confidence`;
+- `medium confidence`;
+- `experimental`.
+
+---
+
+# 18. Интерфейс MVP
+
+## Screen 1 — Project
+
+Поля:
+
+```text
+Business name
+Website
+Product/service
+Country
+City
+Price
+Conversion goal
+Monthly ad budget
+```
+
+---
+
+# Screen 2 — Audience prompt
+
+Большое поле:
+
+### Who do you want to reach?
+
+Пример placeholder:
+
+> People in Astana who already exercise regularly and are considering changing gyms.
+
+Кнопка:
+
+`Build Strategy`
+
+---
+
+# Screen 3 — Clarification
+
+AI может задать максимум 3–5 вопросов.
+
+Пример:
+
+```text
+Do you have an existing customer database?
+
+Do you have Meta Pixel installed?
+
+Is your business local or online?
+```
+
+Не устраивать длинный интервью-процесс.
+
+---
+
+# Screen 4 — Strategy
+
+Навигация:
+
+```text
+Overview
+
+Segments
+
+Offer
+
+Geo & Demographics
+
+Meta Targeting
+
+Retargeting & LAL
+
+Creative Strategy
+
+Experiments
+```
+
+---
+
+# 19. UI карточки сегментов
+
+Каждый сегмент показывается карточкой:
+
+```text
+Regular Gym Users
+
+Intent
+HIGH
+
+Audience hypothesis
+People who already exercise consistently.
+
+Meta Signals
+
+✓ Bodybuilding
+✓ Physical fitness
+✓ Sports nutrition
+? Strength training
+
+Geo
+Astana
+
+Age
+23–42
+
+Creative angle
+Performance
+
+Offer
+7-day premium access
+```
+
+---
+
+# 20. Technology stack
+
+Рекомендуемый MVP:
+
+## Frontend
+
+Next.js
+
+TypeScript
+
+React
+
+Tailwind
+
+shadcn/ui
+
+---
+
+## Backend
+
+Next.js API routes либо отдельный Node.js backend.
+
+Для MVP предпочтительно:
+
+```text
+Next.js
++
+TypeScript
+```
+
+один repository.
+
+---
+
+## Database
+
+PostgreSQL.
+
+Для быстрого MVP:
+
+Supabase.
+
+---
+
+## Authentication
+
+Supabase Auth.
+
+---
+
+## LLM
+
+Абстракция:
+
+```text
+LLMProvider
+```
+
+Чтобы приложение не зависело жёстко от одного провайдера.
+
+Интерфейс:
+
+```typescript
+interface LLMProvider {
+  generateStructured<T>(
+    prompt: string,
+    schema: JSONSchema
+  ): Promise<T>
+}
+```
+
+---
+
+# 21. Structured Output
+
+LLM НИКОГДА не должен возвращать свободный markdown как внутренний формат.
+
+Использовать строго JSON Schema / Zod.
+
+Пример:
+
+```typescript
+const AudienceSegmentSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+
+  intentLevel: z.enum([
+    "low",
+    "medium",
+    "high"
+  ]),
+
+  pains: z.array(z.string()),
+
+  motivations: z.array(z.string()),
+
+  semanticSignals: z.array(z.string()),
+
+  offerAngles: z.array(z.string()),
+
+  creativeAngles: z.array(z.string())
+});
+```
+
+---
+
+# 22. Core domain entities
+
+## Project
+
+```typescript
+Project {
+  id
+  userId
+  businessName
+  website
+  product
+  country
+  city
+  price
+  objective
+  budget
+}
+```
+
+---
+
+## AudienceBrief
+
+```typescript
+AudienceBrief {
+  id
+  projectId
+  prompt
+  createdAt
+}
+```
+
+---
+
+## AudienceSegment
+
+```typescript
+AudienceSegment {
+  id
+  briefId
+
+  name
+  description
+  intentLevel
+
+  pains[]
+  motivations[]
+
+  semanticSignals[]
+}
+```
+
+---
+
+## TargetingEntity
+
+```typescript
+TargetingEntity {
+  id
+
+  query
+
+  metaId
+  metaName
+  metaType
+
+  status
+
+  source
+}
+```
+
+Status:
+
+```text
+verified
+suggested
+unavailable
+restricted
+```
+
+---
+
+## AudienceStrategy
+
+```typescript
+AudienceStrategy {
+  id
+  projectId
+
+  type
+
+  geo
+  ages
+  gender
+
+  includedTargeting[]
+  excludedTargeting[]
+
+  reachEstimate
+}
+```
+
+Type:
+
+```text
+broad
+interest
+retargeting
+lookalike
+experimental
+```
+
+---
+
+# 23. Agent architecture
+
+Не делать одного гигантского prompt.
+
+Использовать специализированные agents/services.
+
+```text
+User Brief
+    │
+    ▼
+Brief Analyzer
+    │
+    ▼
+Audience Segmentation Agent
+    │
+    ├─────────────┐
+    ▼             ▼
+Offer Agent   Signal Generator
+                    │
+                    ▼
+             Meta Resolver
+                    │
+                    ▼
+              Meta Verified
+                    │
+                    ▼
+              Strategy Agent
+                /       \
+               ▼         ▼
+        Retargeting    Geo
+           Agent       Agent
+               \         /
+                ▼       ▼
+              Creative Agent
+                    │
+                    ▼
+             Strategy Compiler
+```
+
+---
+
+# 24. Agents
+
+## Agent 1 — Brief Analyzer
+
+Input:
+
+```json
+{
+  "product": "...",
+  "audiencePrompt": "...",
+  "location": "..."
+}
+```
+
+Output:
+
+```text
+business model
+conversion goal
+desired audience
+intent
+constraints
+missing information
+```
+
+---
+
+# Agent 2 — Audience Segmentation
+
+Создаёт 3–7 сегментов.
+
+Не должен использовать Meta API.
+
+Его работа исключительно маркетинговая.
+
+---
+
+# Agent 3 — Signal Generator
+
+Для каждого сегмента создаёт semantic signals.
+
+Например:
+
+```text
+fitness
+strength training
+bodybuilding
+sports nutrition
+gym
+CrossFit
+```
+
+---
+
+# Agent 4 — Meta Resolver
+
+НЕ LLM.
+
+Обычный deterministic service.
+
+Получает:
+
+```text
+semanticSignals[]
+```
+
+Делает Meta API calls.
+
+Возвращает verified entities.
+
+---
+
+# Agent 5 — Geo Strategy
+
+Предлагает:
+
+```text
+location
+radius
+age
+gender
+language
+```
+
+Meta Resolver проверяет location.
+
+---
+
+# Agent 6 — Retargeting Planner
+
+Использует доступные user assets.
+
+---
+
+# Agent 7 — Offer Strategist
+
+Строит offer/message для каждого сегмента.
+
+---
+
+# Agent 8 — Creative Strategist
+
+Создаёт creative matrix.
+
+---
+
+# Agent 9 — Strategy Critic
+
+Проверяет итоговую стратегию.
+
+Ищет:
+
+- hallucinated targeting;
+- слишком маленькие аудитории;
+- overlapping segments;
+- contradictions;
+- слабые offers;
+- одинаковые сегменты;
+- слишком много условий.
+
+---
+
+# 25. Meta integration layer
+
+Создать abstraction:
+
+```typescript
+interface MetaTargetingProvider {
+
+ searchInterests(
+   query: string
+ ): Promise<MetaTargetingEntity[]>;
+
+ searchBehaviors(
+   query?: string
+ ): Promise<MetaTargetingEntity[]>;
+
+ searchDemographics(
+   query?: string
+ ): Promise<MetaTargetingEntity[]>;
+
+ searchLocations(
+   query: string
+ ): Promise<MetaLocation[]>;
+
+ getSuggestions(
+   ids: string[]
+ ): Promise<MetaTargetingEntity[]>;
+
+ estimateAudience(
+   targetingSpec: TargetingSpec
+ ): Promise<AudienceEstimate>;
+}
+```
+
+Архитектура должна позволять заменить реализацию API.
+
+---
+
+# 26. Meta API адаптер
+
+Первый адаптер:
+
+```text
+MetaMarketingApiProvider
+```
+
+При разработке можно использовать существующие open-source Meta MCP implementations как reference.
+
+Не делать MCP обязательной частью архитектуры.
+
+Core application должен иметь собственный service interface.
+
+MCP можно подключить как adapter.
+
+---
+
+# 27. Cache
+
+Targeting Search API не нужно вызывать бесконечно.
+
+Создать:
+
+```text
+targeting_cache
+```
+
+Хранить:
+
+```text
+query
+country
+result
+API version
+timestamp
+```
+
+TTL:
+
+например 7–30 дней.
+
+Должен быть configurable.
+
+---
+
+# 28. Meta API versioning
+
+Версия Graph API должна храниться в ENV:
+
+```text
+META_API_VERSION=
+```
+
+Не хардкодить её во многих местах.
+
+Targeting API Meta меняется со временем.
+
+Все вызовы должны идти через единый API client.
+
+---
+
+# 29. Audit trail
+
+Каждая рекомендация должна сохранять происхождение.
+
+Например:
+
+```json
+{
+  "value": "Bodybuilding",
+  "source": "meta_api",
+  "meta_id": "...",
+  "generated_from": "gym users",
+  "timestamp": "..."
+}
+```
+
+Это позволит объяснять пользователю:
+
+### Почему система предложила эту аудиторию?
+
+---
+
+# 30. Explainability
+
+На каждом recommendation должен быть:
+
+`Why?`
+
+Например:
+
+### Bodybuilding
+
+Почему:
+
+> Пользователь ищет уже активно тренирующихся людей. Bodybuilding является более сильным сигналом существующего интереса к силовым тренировкам, чем общий wellness interest.
+
+Source:
+
+`Meta verified`
+
+---
+
+# 31. Safety against hallucinations
+
+Backend должен валидировать LLM output.
+
+LLM не имеет права напрямую формировать финальный TargetingSpec.
+
+Flow:
+
+```text
+LLM suggestion
+
+↓
+
+validator
+
+↓
+
+Meta resolver
+
+↓
+
+verified targeting
+
+↓
+
+TargetingSpec
+```
+
+НЕ:
+
+```text
+LLM
+
+↓
+
+Meta Ad Set
+```
+
+---
+
+# 32. MVP — что входит
+
+Версия 0.1 должна уметь:
+
+1. создать проект;
+
+2. принять natural language audience prompt;
+
+3. сегментировать аудиторию;
+
+4. сформировать semantic signals;
+
+5. найти Meta interests;
+
+6. найти Meta geo;
+
+7. показывать Verified / Unavailable;
+
+8. создать 3 targeting strategies:
+
+   - Broad
+   - Interest
+   - Retargeting/LAL recommendation
+
+9. получить доступную оценку audience size/delivery;
+
+10. сформировать offer;
+
+11. сформировать creative strategy;
+
+12. экспортировать результат.
+
+---
+
+# 33. Что НЕ входит в MVP
+
+Не делать пока:
+
+- запуск рекламы;
+- создание campaign;
+- создание ad set;
+- изменение бюджета;
+- автоматическую оптимизацию кампаний;
+- оплату рекламы;
+- генерацию изображений;
+- генерацию видео;
+- полноценный Ads Manager;
+- автоматический bidding;
+- automatic campaign optimization;
+- scraping Facebook Ads Library.
+
+Иначе scope станет огромным.
+
+---
+
+# 34. Export
+
+Кнопка:
+
+`Export Strategy`
+
+Форматы MVP:
+
+### JSON
+
+для дальнейшей автоматизации.
+
+### Markdown
+
+для человека.
+
+Позже:
+
+PDF.
+
+---
+
+# 35. Strategy JSON
+
+Итоговая стратегия должна существовать в machine-readable формате.
+
+Пример:
+
+```json
+{
+  "brief": {
+    "product": "Fitness Club",
+    "location": "Astana",
+    "goal": "Membership"
+  },
+
+  "segments": [],
+
+  "strategies": [
+    {
+      "name": "Fitness Intent",
+      "type": "interest",
+
+      "geo": [],
+
+      "targeting": [],
+
+      "reach": null,
+
+      "offer": {},
+
+      "creative": {}
+    }
+  ]
+}
+```
+
+---
+
+# 36. API endpoints MVP
+
+```text
+POST /api/projects
+
+GET /api/projects/:id
+
+POST /api/projects/:id/brief
+
+POST /api/projects/:id/analyze
+
+GET /api/projects/:id/segments
+
+POST /api/meta/interests/search
+
+POST /api/meta/geo/search
+
+POST /api/meta/audience/estimate
+
+GET /api/projects/:id/strategy
+
+POST /api/projects/:id/strategy/regenerate
+```
+
+---
+
+# 37. Background processing
+
+Analysis может состоять из нескольких этапов.
+
+Job:
+
+```text
+ANALYZING_BRIEF
+
+↓
+
+CREATING_SEGMENTS
+
+↓
+
+GENERATING_SIGNALS
+
+↓
+
+VERIFYING_META_TARGETING
+
+↓
+
+BUILDING_STRATEGIES
+
+↓
+
+BUILDING_CREATIVES
+
+↓
+
+COMPLETE
+```
+
+Frontend показывает прогресс.
+
+---
+
+# 38. Error states
+
+Обязательно обработать:
+
+### Meta token missing
+
+Показывать:
+
+> Connect Meta Ads to verify targeting.
+
+LLM analysis всё равно можно выполнить.
+
+---
+
+### Meta API rate limit
+
+Использовать cache.
+
+Показать:
+
+> Meta verification temporarily unavailable.
+
+Не превращать unverifiable values в verified.
+
+---
+
+### Interest removed by Meta
+
+Обновить:
+
+```text
+status = unavailable
+```
+
+---
+
+### No targeting result
+
+Показать:
+
+```text
+Marketing signal:
+"serious gym users"
+
+Meta targeting:
+No direct targeting entity found.
+
+Recommendation:
+Use Broad + creative qualification.
+```
+
+Это важный UX.
+
+---
+
+# 39. Ключевая идея продукта
+
+Приложение НЕ должно пытаться найти interest для каждой человеческой характеристики.
+
+Иногда лучший вывод системы:
+
+> Эту характеристику нельзя надёжно задать через Meta targeting. Используйте broad audience и квалифицируйте пользователя через creative/message.
+
+Это должно быть преимуществом системы.
+
+---
+
+# 40. Testing
+
+Минимум следующие уровни.
+
+## Unit tests
+
+- LLM schema validation;
+- targeting resolver;
+- entity normalization;
+- scoring;
+- strategy validation.
+
+## Integration tests
+
+- Meta API;
+- database;
+- LLM structured output.
+
+## Fixture tests
+
+Создать минимум 20 advertising briefs.
+
+Например:
+
+```text
+Fitness club
+Dentist
+Real estate
+English school
+Restaurant
+B2B SaaS
+Beauty salon
+Car service
+Online course
+Travel agency
+```
+
+Проверять:
+
+- отсутствие hallucinated Meta targeting;
+- сегментацию;
+- корректный JSON;
+- отсутствие duplicate segments.
+
+---
+
+# 41. Acceptance criteria MVP
+
+MVP считается готовым, если пользователь может написать:
+
+> У меня фитнес-клуб в Астане. Хочу привлечь людей 25–40 лет, которые уже занимаются спортом и думают поменять зал.
+
+и получить:
+
+### 1. Segmentation
+
+минимум 3 осмысленных сегмента.
+
+### 2. Meta Targeting
+
+только verified Meta entities маркируются как доступные.
+
+### 3. Geo
+
+реально существующий Meta location.
+
+### 4. Strategies
+
+минимум:
+
+```text
+Broad
+Interest-based
+Retargeting/LAL
+```
+
+### 5. Offer
+
+отдельный offer для каждого сегмента.
+
+### 6. Creative
+
+отдельный creative angle для каждого сегмента.
+
+### 7. Reach
+
+Meta estimate, если API предоставляет его для этой конфигурации.
+
+### 8. Explainability
+
+пользователь понимает, почему каждый targeting option был выбран.
+
+---
+
+# 42. Definition of Done
+
+Фича считается завершённой только если:
+
+- TypeScript без ошибок;
+- schemas валидируются;
+- tests проходят;
+- никакие secrets не находятся в repository;
+- Meta IDs не генерируются LLM;
+- Meta data имеет source;
+- failures API корректно отображаются;
+- пользователь видит разницу между hypothesis и verified targeting.
+
+---
+
+# 43. Repository structure
+
+Рекомендуемая структура:
+
+```text
+/apps
+  /web
+
+/packages
+  /ai
+  /meta-api
+  /database
+  /schemas
+  /targeting-engine
+  /strategy-engine
+  /ui
+
+/docs
+  architecture.md
+  meta-api.md
+  prompts.md
+  domain-model.md
+  testing.md
+```
+
+---
+
+# 44. Environment variables
+
+```text
+DATABASE_URL=
+
+LLM_API_KEY=
+
+META_APP_ID=
+META_APP_SECRET=
+META_ACCESS_TOKEN=
+META_AD_ACCOUNT_ID=
+META_API_VERSION=
+
+NEXT_PUBLIC_APP_URL=
+```
+
+Secrets никогда не отправлять на frontend.
+
+---
+
+# 45. Первый milestone
+
+## Targeting Intelligence Engine
+
+До построения красивого UI необходимо доказать core functionality.
+
+CLI/input:
+
+```text
+Product:
+Fitness club
+
+Location:
+Astana
+
+Audience:
+People who already exercise regularly.
+```
+
+Output JSON:
+
+```text
+segments
+semanticSignals
+verifiedMetaInterests
+geo
+audienceStrategies
+offers
+creativeAngles
+```
+
+Если этот pipeline работает хорошо — только тогда строить полноценный UI.
+
+---
+
+# 46. Разделение работы между coding agents
+
+## Agent A — Architecture
+
+Создать:
+
+- monorepo;
+- schemas;
+- database;
+- domain models;
+- interfaces.
+
+Не реализовывать UI.
+
+---
+
+## Agent B — Meta API
+
+Создать:
+
+```text
+MetaClient
+TargetingSearch
+GeoSearch
+TargetingSuggestions
+AudienceEstimate
+```
+
+Добавить mocks и tests.
+
+---
+
+## Agent C — AI Engine
+
+Создать:
+
+```text
+BriefAnalyzer
+AudienceSegmenter
+SignalGenerator
+OfferStrategist
+CreativeStrategist
+StrategyCritic
+```
+
+Все outputs строго structured.
+
+---
+
+## Agent D — Targeting Engine
+
+Соединить:
+
+```text
+LLM signals
++
+Meta search
++
+verification
++
+ranking
+```
+
+Это основной intelligence layer.
+
+---
+
+## Agent E — Strategy Engine
+
+Строит:
+
+```text
+Broad
+Interest
+Retargeting
+Lookalike
+```
+
+strategies.
+
+---
+
+## Agent F — Frontend
+
+Сделать:
+
+```text
+Project page
+Audience prompt
+Analysis progress
+Segments
+Meta targeting
+Strategy cards
+Creative matrix
+```
+
+---
+
+## Agent G — QA
+
+Подготовить fixtures.
+
+Автоматизированно проверять:
+
+- schemas;
+- API;
+- hallucinations;
+- duplicated segments;
+- error states;
+- integration.
+
+---
+
+# 47. Последовательность разработки
+
+Работать не параллельно хаотично, а так:
+
+```text
+PHASE 1
+
+Schemas
+Database
+Meta API adapter
+LLM structured output
+
+↓
+
+PHASE 2
+
+Audience segmentation
+Signal generator
+Meta resolver
+
+↓
+
+PHASE 3
+
+Targeting strategies
+Geo
+Reach estimation
+
+↓
+
+PHASE 4
+
+Offer
+Creative strategy
+Retargeting/LAL
+
+↓
+
+PHASE 5
+
+Frontend
+
+↓
+
+PHASE 6
+
+Tests
+Polish
+Deployment
+```
+
+---
+
+# 48. North Star
+
+Пользователь не должен разбираться в сотнях настроек Meta Ads.
+
+Он должен сказать:
+
+> «Вот мой продукт. Вот кого я хочу найти.»
+
+А приложение должно ответить:
+
+> «Вот как эту аудиторию разумнее всего искать через Meta, что реально доступно в рекламной системе, какие альтернативы протестировать, что именно показать каждому сегменту и почему.»
+
+---
+
+# 49. Главный критерий качества продукта
+
+Не количество рекомендаций.
+
+А:
+
+**насколько хорошо приложение переводит человеческое описание аудитории в проверяемую и практически применимую рекламную стратегию Meta Ads.**
